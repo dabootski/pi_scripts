@@ -4,6 +4,18 @@ import sys
 import time
 
 pin = int(sys.argv[1])
+withinRangeTimeout = int(sys.argv[2]) # In seconds
+rangeThreshold = int(sys.argv[3]) # In centimeters
+outOfRangeSince = None
+withinRangeSince = None
+
+print("")
+print("##################################################")
+print("PIN: " + str(pin))
+print("RANGE THRESHOLD: " + str(rangeThreshold))
+print("WITHIN RANGE TIMEOUT: " + str(withinRangeTimeout))
+print("##################################################")
+print("")
 
 def delayMicroseconds(num):
   time.sleep(num/1000000.0)
@@ -43,9 +55,12 @@ def measureDistance():
 
   #print("ELAPSED TIME: " + str(elapsed))
   #print("DISTANCE: " + str(distance))
-  print(str(distance))
+  #print(str(distance))
 
-  distance
+  return distance
+
+def notify():
+  print("NOTIFYING!!!")
 
 #
 # Run program
@@ -58,6 +73,26 @@ GPIO.output(pin, GPIO.LOW)
 delayMicroseconds(5)
 
 while True:
-  measureDistance()
+  distance = measureDistance()
+
+  print("")
+  print("DISTANCE: " + str(distance))
+
+  if (withinRangeSince is None) & (distance <= rangeThreshold):
+    print("WITHIN RANGE AND WASN'T BEFORE: " + str(time.time()))
+    withinRangeSince = time.time()
+
+  if (withinRangeSince is not None) & (distance > rangeThreshold):
+    print("OUT OF RANGE")
+    withinRangeSince = None
+
+  if (withinRangeSince is not None):
+    secondsWithinRange = time.time() - withinRangeSince
+
+    print("SECONDS WITHIN RANGE: " + str(secondsWithinRange))
+
+    if secondsWithinRange > withinRangeTimeout:
+      notify()
+
   time.sleep(1)
 
