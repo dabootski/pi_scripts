@@ -2,20 +2,36 @@ import RPi.GPIO as GPIO
 import atexit
 import sys
 import time
+from twilio.rest import TwilioRestClient
+
+import logging
+logger = logging.getLogger('inhaler')
+hdlr = logging.FileHandler('/var/log/inhaler.log')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr) 
+logger.setLevel(logging.DEBUG)
+logger.debug("\n***********************************")
+logger.debug("APP STARTED AT")
+logger.debug("***********************************\n")
 
 pin = int(sys.argv[1])
 withinRangeTimeout = int(sys.argv[2]) # In seconds
 rangeThreshold = int(sys.argv[3]) # In centimeters
+notificationTimeout = int(sys.argv[4]) # In seconds
+distanceCheckInterval = int(sys.argv[5])
 outOfRangeSince = None
 withinRangeSince = None
+lastNotifiedAt = time.time() - notificationTimeout
 
-print("")
-print("##################################################")
-print("PIN: " + str(pin))
-print("RANGE THRESHOLD: " + str(rangeThreshold))
-print("WITHIN RANGE TIMEOUT: " + str(withinRangeTimeout))
-print("##################################################")
-print("")
+logger.debug("")
+logger.debug("##################################################")
+logger.debug("PIN: " + str(pin))
+logger.debug("RANGE THRESHOLD: " + str(rangeThreshold))
+logger.debug("WITHIN RANGE TIMEOUT: " + str(withinRangeTimeout))
+logger.debug("NOTIFICATION TIMEOUT: " + str(notificationTimeout))
+logger.debug("##################################################")
+logger.debug("")
 
 def delayMicroseconds(num):
   time.sleep(num/1000000.0)
@@ -53,14 +69,28 @@ def measureDistance():
   # That was the distance there and back so halve the value
   distance = distance / 2
 
-  #print("ELAPSED TIME: " + str(elapsed))
-  #print("DISTANCE: " + str(distance))
-  #print(str(distance))
+  #logger.debug("ELAPSED TIME: " + str(elapsed))
+  #logger.debug("DISTANCE: " + str(distance))
+  #logger.debug(str(distance))
 
   return distance
 
 def notify():
-  print("NOTIFYING!!!")
+  # TODO: Make system call to Twilio!!!
+  logger.debug("\n\n**************************")
+  logger.debug("NOTIFYING!!!")
+  logger.debug("**************************\n")
+
+  ACCOUNT_SID = "AC1cbd1a59c8e0d958a72fbdbfd22f443a"
+  AUTH_TOKEN = "5e70041ab8f9532d5b60691b8dae0aa0"
+
+  client = TwilioRestClient(ACCOUNT_SID, AUTH_TOKEN)
+
+  client.messages.create(
+    to="6128591572",
+    from_="+16122550964",
+    body="TIme for Pastor's inhaler!",
+  )
 
 #
 # Run program
@@ -75,24 +105,45 @@ delayMicroseconds(5)
 while True:
   distance = measureDistance()
 
-  print("")
-  print("DISTANCE: " + str(distance))
+  logger.debug("")
+  logger.debug("DISTANCE: " + str(distance))
 
-  if (withinRangeSince is None) & (distance <= rangeThreshold):
-    print("WITHIN RANGE AND WASN'T BEFORE: " + str(time.time()))
+  # Object is within range for first time
+  if (withinRangeSince is None) and (distance <= rangeThreshold):
+    logger.debug("WITHIN RANGE AND WASN'T BEFORE: " + str(time.time()))
     withinRangeSince = time.time()
 
-  if (withinRangeSince is not None) & (distance > rangeThreshold):
-    print("OUT OF RANGE")
+  # Object is now out of range
+  if (withinRangeSince is not None) and (distance > rangeThreshold):
+    logger.debug("OUT OF RANGE")
     withinRangeSince = None
 
+  # Determine how long the object has been within range and if notifications should be sent
   if (withinRangeSince is not None):
     secondsWithinRange = time.time() - withinRangeSince
 
-    print("SECONDS WITHIN RANGE: " + str(secondsWithinRange))
+    logger.debug("SECONDS WITHIN RANGE: " + str(secondsWithinRange))
 
     if secondsWithinRange > withinRangeTimeout:
-      notify()
+      # OLD
+      #if (lastNotifiedAt is None):
+        #notify()
+        #lastNotifiedAt = time.time()
+      #else:
+      #  secondsSinceLastNotification = (time.time() - lastNotifiedAt)
+      #  logger.debug("SECONDS SINCE LAST NOTICE: " + str(secondsSinceLastNotification))
 
-  time.sleep(1)
+      #  if (secondsSinceLastNotification > notificationTimeout):
+      #    notify()
+      #    lastNotifiedAt = time.time()
+
+      # NEW
+      secondsSinceLastNotification = (time.time() - lastNotifiedAt)
+      logger.debug("SECONDS SINCE LAST NOTICE: " + str(secondsSinceLastNotification))
+
+      if (secondsSinceLastNotification > notificationTimeout):
+        notify()
+        lastNotifiedAt = time.time()
+
+  time.sleep(distanceCheckInterval)
 
